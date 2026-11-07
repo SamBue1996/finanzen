@@ -333,13 +333,14 @@ button.back{background:none!important;border:0!important;color:var(--ac)!importa
 <body>
 <main>
 <h1 id="h1">Wohin geht dein Geld?</h1>
-<p class="mu" id="intro">Lade CSV-Exporte oder PDF-Kontoauszüge deines Bankkontos hoch (auch mehrere PDFs auf einmal). Alles wird nur in deinem Browser verarbeitet – es wird nichts hochgeladen oder gespeichert.</p>
+<p class="mu" id="intro">Lade CSV-Exporte oder PDF-Kontoauszüge deines Bankkontos hoch (auch mehrere PDFs auf einmal). Alles wird in deinem Browser verarbeitet und nur auf diesem Gerät gespeichert, außer du verbindest „Gemeinsam speichern“.</p>
 
 <ol id="steps" class="mu" style="padding-left:20px;margin:8px 0 14px;line-height:1.6"><li>Kontoauszug als PDF oder CSV laden</li><li>Konto benennen, fertig</li><li>Umsätze antippen, Kategorien und Verträge zuordnen</li></ol>
 <div class="box drop" id="drop">
   <p style="margin:0 0 12px">CSV oder PDF hierher ziehen oder auswählen</p>
   <label class="btn">Datei wählen<input type="file" id="file" accept=".csv,.txt,.pdf,text/csv,application/pdf" multiple hidden></label>
   <button class="g" id="demo" style="margin-left:6px">Mit Beispieldaten testen</button>
+  <div id="ghStart"></div>
 </div>
 <div id="err" class="mu neg"></div>
 
@@ -562,12 +563,12 @@ function impCard(){if(!ACC.length||!ALL.length)return'';const L=LI.accs||{},now=
 const isUnc=r=>!r.tr&&r.amt<0&&!r.man&&!tov[r.k]&&!TXPRE[r.k]&&(r.cat==='Sonstiges'||/^(Unbekannt|PayPal)$/.test(r.mer));
 function uncRows(){const last=Math.max(...ALL.map(r=>+r.d));return ALL.filter(r=>isUnc(r)&&last-r.d<=90*864e5)}
 function uncBox(){const U=uncRows();return U.length?`<div class='stale go' data-act='unclr'><span>${U.length===1?'Ein Umsatz ist':U.length+' Umsätze sind'} für mich unklar</span><b>Zuordnen ›</b></div>`:''}
-function impLine(){const t=(AN.imp&&AN.imp.t)||Math.max(0,...Object.values(LI.accs||{}).map(x=>+x.ts||0));const last=Math.max(...ALL.map(r=>+r.d));if(!t)return `<p class='mu sm imp-l'>Umsätze bis ${dmy(last)}</p>`;
-  const d=Math.floor((Date.now()-t)/864e5);return `<p class='mu sm imp-l'>Letzter Import ${d===0?'heute':d===1?'gestern':'am '+dmy(t)}${AN.imp&&AN.imp.t===t?' · '+AN.imp.n+' neue':''} · Umsätze bis ${dmy(last)}</p>`}
+function impLine(){const t=(AN.imp&&AN.imp.t)||Math.max(0,...Object.values(LI.accs||{}).map(x=>+x.ts||0)),last=Math.max(...ALL.map(r=>+r.d)),d=Math.floor((Date.now()-(t||last))/864e5);
+  const tx=(t?`Letzter Import ${d===0?'heute':d===1?'gestern':'vor '+d+' Tagen'}${AN.imp&&AN.imp.t===t?' · '+AN.imp.n+' neue':''} · `:'')+`Umsätze bis ${dmy(last)}`;
+  return d>=14?`<div class='stale go' data-act='merge'><span>${tx}</span><b>Importieren ›</b></div>`:`<p class='mu sm imp-l'>${tx}</p>`}
 function impMini(){if(!ACC.length||!ALL.length)return '';const L=LI.accs||{},now=Date.now();
   const res=LI.show?ACC.filter(a=>L[a.id]&&L[a.id].n!=null&&now-L[a.id].ts<36e5*24*3).map(a=>`<p class='sm' style='margin:6px 0 0'><b>${esc(a.name)}</b>: ${L[a.id].n} neue Umsätze, neuester ${dmy(L[a.id].last)}</p>`).join(''):'';
-  const main=ACC.slice().sort((a,b)=>ALL.filter(r=>r.acc===b.id).length-ALL.filter(r=>r.acc===a.id).length)[0],t=L[main.id]&&L[main.id].ts,days=Math.floor((now-Math.max(t||0,+lastBk(main.id)||0))/864e5);
-  return impLine()+(res?`<div class='box thx'><b>Import fertig</b>${res}<button class='g' data-act='impok' style='margin-top:8px'>Verstanden</button></div>`:'')+(days>=14?`<div class='stale go' data-act='merge'><span>Letzte Umsätze vor ${days} Tagen</span><b>Importieren ›</b></div>`:'')}
+  return impLine()+(res?`<div class='box thx'><b>Import fertig</b>${res}<button class='g' data-act='impok' style='margin-top:8px'>Verstanden</button></div>`:'')}
 function exportHint(){const ne=nextExport();return `<div class='box'><b>Nächster Export</b><p class='sm' style='margin:6px 0 0'>In der VR-App die Umsätze als CSV exportieren, wenn angeboten. Das geht schneller und genauer als PDF. ${ne?'Zeitraum ab <b>'+dmy(ne)+'</b>, ein paar Tage Überlappung sind gewollt.':''} Doppelte Buchungen erkennt die App selbst. Dann hier „Konto / Umsätze hinzufügen“. Mehrere Dateien kannst du auf einmal auswählen.</p></div>`}
 function tabAcc0(){const nt=ALL.filter(r=>r.tr).length;
   return `<div class='box'><b>Konten</b>${ACC.length?ACC.map(a=>`<div class='rr'><div><b>${esc(a.name)}</b><small>${ATYPE[a.type]||''}${a.iban?' · '+esc(a.iban.slice(0,4)+' •••• '+a.iban.slice(-4)):''} · ${ALL.filter(r=>r.acc===a.id).length} Umsätze</small>${chkLine(a)}</div><button class='g' data-ae='${a.id}'>Bearbeiten</button></div>`).join(''):`<p class='mu' style='margin:8px 0 0'>Noch kein Konto.</p>`}<p class='mu' style='margin:10px 0 4px'>${nt?`${nt} Umbuchungen erkannt. Sie zählen weder als Einnahme noch als Ausgabe.`:'Weitere Konten fügst du unter „Daten“ mit „Konto / Umsätze hinzufügen“ hinzu. Umbuchungen zwischen deinen Konten werden dann automatisch erkannt.'}</p>${nt?`<button class='g' data-act='showtr'>Umbuchungen ansehen</button>`:''}</div>`}
@@ -696,7 +697,7 @@ const isKB=r=>{const v=-r.amt;return r.amt<0&&v>=NV('kbMin')&&v<=NV('kbMax')&&kb
 const isGT=r=>{const v=-r.amt;return r.amt<0&&r.mer==='Geldautomat'&&(v>=NV('gtMin')&&v<=NV('gtMax'))};
 const FIX=new Set(['Wohnen','Telefon & Internet','Sparen & Anlage','Kirche & Gemeinde']);const NOB=new Set(['Wohnen','Versicherung','Telefon & Internet','Abos & Streaming','Gebühren & Steuern','Kirche & Gemeinde','Überweisungen & Daueraufträge']);const inBud=r=>(r.amt<0||r.rf)&&!r.sp&&r.cat!=='Sparen & Anlage'&&(!NOB.has(r.cat)||asg().has(r.cat));let BC=CN.filter(c=>c!=='Sparen & Anlage'&&c!=='Umbuchung'&&!NOB.has(c));
 const STS={thr:{n:'Jahresposten ab',d:150,min:20,u:'€',step:10},thrS:{n:'Shopping & Einrichtung ab',d:80,min:20,u:'€',step:10},bigAb:{n:'Immer Jahresposten ab',d:1000,min:100,u:'€',step:100},vacAb:{n:'Freizeit wird Urlaub ab',d:100,min:20,u:'€',step:10},hotelAb:{n:'Hotel wird Urlaub ab',d:50,min:0,u:'€',step:10},kbMin:{n:'Kinderbetreuung von',d:20,min:1,u:'€',step:5},kbMax:{n:'Kinderbetreuung bis',d:40,min:1,u:'€',step:5},gtMin:{n:'Gemeinschaftstag von',d:450,min:50,u:'€',step:10},gtMax:{n:'Gemeinschaftstag bis',d:650,min:50,u:'€',step:10},zhAb:{n:'Auszahlung fürs Geben ab',d:250,min:50,u:'€',step:10},tithe:{n:'Zehnt-Ziel',d:10,min:0,max:100,u:'%',step:1},titheEur:{n:'Zehnt pro Monat',d:0,min:0,u:'€',step:10},bonus:{n:'13. Gehalt im Dezember',d:3100,min:0,u:'€',step:50}};
-let tab='ueb',mon='',thr=150,AN={bonus:3100,rate:6,yrs:20,sav:null,car:null,base:'recent',mode:'year',goal:null,tithe:10,trips:[],tcats:['Freizeit','Restaurants & Lieferdienste','Sonstiges'],thrS:80,cust:{},vac:0,yr:{},cy:[]},B=[],tov={},RS=new Set,MI=[],drill=null,editB=null,alle=false,rules={},CT={},MC=[],openC=null,addC=false,mergeNext=false,saveErr=false,wipeArm=false,UR=[],msub='',pend=null,erule=null,CYC={mode:'sal',src:null,day:15,auto:null},CY=[],CYM={},CYLEN=30,UC=[],LK={},LKM={},SPL={},etx=null,ect=null,CTS=[],CMAP={},spD={amt:'',cat:'Kinderbetreuung'},ctScope='one',sdeb=null,VER='3.26',KV=0,RU=null,usrch=false,ONE={},ovsub='aus',ACC=[],accF='',ALL=[],VR=[],pendAcc='a0',newAccs=[],eacc=null,accArm=false;
+let tab='ueb',mon='',thr=150,AN={bonus:3100,rate:6,yrs:20,sav:null,car:null,base:'recent',mode:'year',goal:null,tithe:10,trips:[],tcats:['Freizeit','Restaurants & Lieferdienste','Sonstiges'],thrS:80,cust:{},vac:0,yr:{},cy:[]},B=[],tov={},RS=new Set,MI=[],drill=null,editB=null,alle=false,rules={},CT={},MC=[],openC=null,addC=false,mergeNext=false,saveErr=false,wipeArm=false,UR=[],msub='',pend=null,erule=null,CYC={mode:'sal',src:null,day:15,auto:null},CY=[],CYM={},CYLEN=30,UC=[],LK={},LKM={},SPL={},etx=null,ect=null,CTS=[],CMAP={},spD={amt:'',cat:'Kinderbetreuung'},ctScope='one',sdeb=null,VER='3.27',KV=0,RU=null,usrch=false,ONE={},ovsub='aus',ACC=[],accF='',ALL=[],VR=[],pendAcc='a0',newAccs=[],eacc=null,accArm=false;
 let impFlag=false,impIn=null,impSkip=false,impOld=new Set,LI=(()=>{try{return JSON.parse(localStorage.getItem('ua_imp')||'{}')||{}}catch(e){return{}}})();const saveLI=()=>{try{localStorage.setItem('ua_imp',JSON.stringify(LI))}catch(e){}};
 try{const s=JSON.parse(localStorage.getItem('ua2')||'{}');B=s.B||[];thr=s.thr||150;if(s.AN)Object.assign(AN,s.AN);tov=s.tov||{};rules=s.rules||{};try{const O='Freizeit & Reisen',N='Freizeit';Object.keys(tov).forEach(k=>{if(tov[k]===O)tov[k]=N});Object.keys(rules).forEach(k=>{if(rules[k]===O)rules[k]=N});(s.UR||[]).forEach(u=>{if(u.cat===O)u.cat=N});(s.B||[]).forEach(x=>{x.cats=(x.cats||[]).map(c=>c===O?N:c);if(x.name===O)x.name=N});if(AN.cust&&AN.cust[O]!=null){AN.cust[N]=AN.cust[O];delete AN.cust[O]}}catch(e){}CT=s.CT||{};MC=s.MC||[];UR=s.UR||[];if(s.CYC)Object.assign(CYC,s.CYC);ACC=s.ACC||[];UC=s.UC||[];LK=s.LK||{};LKM=s.LKM||{};SPL=s.SPL||{};ONE=s.ONE||{};KV=s.KV||0;RU=s.RU||null}catch(e){}
 const SS=()=>JSON.stringify({KV,RU,UC,LK,LKM,SPL,ONE,ACC,B,thr,AN,tov,rules,CT,MC,UR,CYC:{mode:CYC.mode,src:CYC.src,day:CYC.day}});
@@ -1118,8 +1119,7 @@ function incType(r){const t=(r.mer+' '+r.pay+' '+(r.txt||'')).toLowerCase(),src=
 const LGM=200,STOPW=new Set(['gmbh','und','muenchen','münchen','munchen','dachau','germany','deutschland','payment','payments','sumup','payone','visa','mastercard','girocard','kartenzahlung','lastschrift','ectl','cicc','ohne','karte','shop','store','markt','center','centre','straße','strasse']);
 function LG(rs,cat,how){try{rs=(rs||[]).filter(Boolean);if(!rs.length||!cat)return;const r=rs[0],am=rs.map(x=>Math.abs(x.amt)).sort((a,b)=>a-b);
   const e={id:'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),t:Date.now(),mer:r.mer,cat,was:r.cat,how,n:rs.length,amt:Math.round(am[am.length>>1]*100)/100,pay:(r.pay||'').slice(0,40),txt:desc(r).replace(/\d{4,}/g,'').slice(0,100)};
-  AN.lg=(AN.lg||[]).filter(x=>!(x.mer===e.mer&&x.how!=='einzeln'&&how!=='einzeln')).concat(e).slice(-LGM);
-  if(typeof CL!=='undefined'&&CL.db&&!window.__demo&&!CL.quiet){try{CL.db.collection('learn').doc(e.id).set(e).catch(()=>{})}catch(_){}}}catch(_){}}
+  AN.lg=(AN.lg||[]).filter(x=>!(x.mer===e.mer&&x.how!=='einzeln'&&how!=='einzeln')).concat(e).slice(-LGM)}catch(_){}}
 const b64=u=>{let s='';for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));return btoa(s)};
 async function gz(str){const cs=new CompressionStream('gzip'),w=cs.writable.getWriter();w.write(new TextEncoder().encode(str));w.close();return new Uint8Array(await new Response(cs.readable).arrayBuffer())}
 async function ungz(u){const ds=new DecompressionStream('gzip'),w=ds.writable.getWriter();w.write(u);w.close();return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer())}
@@ -1700,38 +1700,29 @@ function expCsv(){
   const L=ALL.slice().sort((a,b)=>+a.d-+b.d).map(r=>{const c=CMAP[r.k];return[isoD(r.d),cyLab(r.d),accName(r.acc),r.amt.toFixed(2),r.cat,r.tr?'Umbuchung':r.amt>0?'Einnahme':'Ausgabe',r.mer,r.pay,(r.txt||'').slice(0,400),r.sp?'ja':'',r.one?'ja':'',c?c.name:'',r.tr?'ja':''].map(q).join(';')});
   return '﻿'+H.join(';')+'\n'+L.join('\n')}
 async function expSave(name,data){
-  try{const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;
-    if(!dl){const f=new File([data],name,{type:/\.csv$/.test(name)?'text/csv':'text/plain'});
-      if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});toast('Gespeichert');return true}
-      const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);toast('Datei gespeichert');return true}
-    await dl.save({filename:name,data});toast('Export gespeichert');return true}
-  catch(e){toast((e&&(e.code==='declined'||e.name==='AbortError'))?'Abgebrochen':'Export nicht möglich: '+((e&&e.code)||'Fehler'))}}
-/* ===== Cloud: gemeinsamer Haushalt =====
-   Alle Daten liegen in hh/ – lesen und schreiben dürfen nur der Besitzer und per E-Mail als Bearbeiter Eingeladene (Regel bei der Veröffentlichung).
-   Jede Fassung wird unter eigener Kennung geschrieben (hh/<ver>_<i>), hh/meta zeigt auf die gültige. So liest niemand eine halb geschriebene Fassung.
-   Haben zwei Personen gleichzeitig geändert, wird dreiseitig zusammengeführt: gemeinsamer letzter Stand, meiner, der andere.
-   Die frühere private Sicherung (data/users/<id>) wird beim ersten Start übernommen und bleibt als Kopie liegen. */
+  try{const f=new File([data],name,{type:/\.csv$/.test(name)?'text/csv':'text/plain'});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});toast('Gespeichert');return true}
+    const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);toast('Datei gespeichert');return true}
+  catch(e){toast(e&&e.name==='AbortError'?'Abgebrochen':'Speichern nicht möglich')}}
+/* ===== Gemeinsam speichern (GitHub) =====
+   Der gemeinsame Stand liegt als Datei in einem privaten GitHub-Repository. Der Zugang (Repository + Token) liegt nur auf dem Gerät (ua_gh),
+   nie im Code oder in der Sicherung. Die Datei-Version (sha) schützt vor Überschreiben: Haben zwei Personen gleichzeitig geändert,
+   wird dreiseitig zusammengeführt (gemeinsamer letzter Stand, meiner, der andere). */
 let clpArm=false;
-const CL={db:null,id:null,st:'',last:0,busy:false,again:false,tm:null,quiet:false},CH=180000;
+const CL={be:null,st:'',last:0,busy:false,again:false,tm:null,quiet:false};
 const lsG=k=>{try{return +localStorage.getItem(k)||0}catch(e){return 0}},lsS=(k,v)=>{try{localStorage.setItem(k,String(v))}catch(e){}};
 const lsR=k=>{try{return localStorage.getItem(k)}catch(e){return null}},lsT=(k,v)=>{try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}};
-const hhCol=()=>CL.db.collection('hh'),clOld=()=>CL.db.collection('data/users/'+CL.id);
-/* Speicherorte für den gemeinsamen Stand: Claude-Datenbank (hh/) oder eine Datei in einem privaten GitHub-Repository.
-   GitHub: Zugang (Repository + Token) liegt nur auf dem Gerät (ua_gh), nie im Code oder in der Sicherung. Die Datei-Version (sha) schützt vor Überschreiben. */
 const ghCfg=()=>{try{return JSON.parse(localStorage.getItem('ua_gh')||'null')}catch(e){return null}},GHF='finanzen-daten.json';
 async function ghReq(path,opt){const g=ghCfg();const r=await fetch('https://api.github.com/repos/'+g.repo+path,{cache:'no-store',...opt,headers:{Authorization:'Bearer '+g.token,Accept:'application/vnd.github+json',...(opt&&opt.headers||{})}});if(r.status===401&&path)throw new Error('GitHub-Token abgelaufen oder ungültig: unter Mehr › Daten trennen und neu verbinden');return r}
 const u8b64=t=>b64(new TextEncoder().encode(t)),b64u8=t=>{const b=atob(t.replace(/\s/g,'')),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return new TextDecoder().decode(u)};
-const BE={
-  claude:{meta:async()=>{const m=await hhCol().doc('meta').get();if(!m.exists)return null;const d=m.data();return{ver:d.ver,ts:d.ts,read:()=>hhRead(d)}},push:(o,prev,mod)=>hhPush(o,prev,mod)},
-  gh:{meta:async()=>{const r=await ghReq('/contents/'+GHF);if(r.status===404)return null;if(!r.ok)throw new Error('GitHub '+r.status);const j=await r.json();
-      let c=j.content;if(!c||j.encoding!=='base64'){const r2=await ghReq('/git/blobs/'+j.sha);if(!r2.ok)throw new Error('GitHub '+r2.status);c=(await r2.json()).content}
-      const d=JSON.parse(b64u8(c));return{ver:j.sha,ts:d.ts,read:()=>bkRead(d.s)}},
-    push:async(o,prev,mod)=>{const s=await enc(o),body={message:'Stand '+new Date().toLocaleString('de-DE'),content:u8b64(JSON.stringify({ts:Date.now(),rows:(o.T||[]).length,s}))};if(prev)body.sha=prev;
-      const r=await ghReq('/contents/'+GHF,{method:'PUT',body:JSON.stringify(body),headers:{'Content-Type':'application/json'}});
-      if(r.status===409||r.status===422)return false;if(!r.ok)throw new Error('GitHub '+r.status);const j=await r.json();setBase(o,j.content.sha,mod);return true}}};
-const be=()=>BE[CL.be];
+const GH={meta:async()=>{const r=await ghReq('/contents/'+GHF);if(r.status===404)return null;if(!r.ok)throw new Error('GitHub '+r.status);const j=await r.json();
+    let c=j.content;if(!c||j.encoding!=='base64'){const r2=await ghReq('/git/blobs/'+j.sha);if(!r2.ok)throw new Error('GitHub '+r2.status);c=(await r2.json()).content}
+    const d=JSON.parse(b64u8(c));return{ver:j.sha,ts:d.ts,read:()=>bkRead(d.s)}},
+  push:async(o,prev,mod)=>{const s=await enc(o),body={message:'Stand '+new Date().toLocaleString('de-DE'),content:u8b64(JSON.stringify({ts:Date.now(),rows:(o.T||[]).length,s}))};if(prev)body.sha=prev;
+    const r=await ghReq('/contents/'+GHF,{method:'PUT',body:JSON.stringify(body),headers:{'Content-Type':'application/json'}});
+    if(r.status===409||r.status===422)return false;if(!r.ok)throw new Error('GitHub '+r.status);const j=await r.json();setBase(o,j.content.sha,mod);return true}};
 const clUi=()=>{try{if(tab==='mehr'&&msub==='dat')render(true)}catch(e){}};
-function clLine(){const t=CL.be?(CL.st==='ok'?'Gemeinsam gespeichert · zuletzt abgeglichen '+new Date(CL.last).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+' Uhr':CL.st==='ausstehend'?'Änderungen werden gleich gespeichert':CL.st||'Verbinde …'):'';return (t?`<p class='mu sm' style='margin:4px 0'>${esc(t)}</p>`:'')+(CL.be==='claude'?`<p class='mu sm' style='margin:4px 0'>Gemeinsam nutzen: im Teilen-Menü per E-Mail als Bearbeiter einladen.</p>`:'')}
+function clLine(){if(!CL.be)return '';const t=CL.st==='ok'?'Gemeinsam gespeichert · zuletzt abgeglichen '+new Date(CL.last).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+' Uhr':CL.st==='ausstehend'?'Änderungen werden gleich gespeichert':CL.st||'Verbinde …';return `<p class='mu sm' style='margin:4px 0'>${esc(t)}</p>`}
 function clMod(){if(CL.quiet||window.__demo)return;lsS('ua_mod',Date.now());clSoon()}
 function clSoon(){if(!CL.be||window.__demo)return;CL.st='ausstehend';clearTimeout(CL.tm);CL.tm=setTimeout(()=>{CL.tm=null;clSync()},4000)}
 const enc=async o=>{const j=JSON.stringify(o);try{return 'UA1:'+b64(await gz(j))}catch(e){return 'UA0:'+j}};
@@ -1747,58 +1738,39 @@ function mT(b,l,r){const K=x=>x.join('\u0001'),cnt=a=>{const m=new Map;(a||[]).f
 const merge3=(b,l,r)=>({v:2,S:m3(b.S||{},l.S||{},r.S||{}),T:mT(b.T,l.T,r.T)});
 function applyQ(o){CL.quiet=true;try{applyObj(o)}finally{CL.quiet=false}}
 function setBase(o,ver,mod){lsT('ua_bv',ver);lsS('ua_bmod',mod);lsT('ua_base',null);try{localStorage.setItem('ua_base',JSON.stringify(o))}catch(e){}}
-async function hhRead(m){let txt='';for(let i=0;i<m.n;i++){const c=await hhCol().doc(m.ver+'_'+i).get();if(!c.exists)throw new Error('Fassung unvollständig');txt+=c.data().s}return bkRead(txt)}
-async function hhPush(o,prev,mod){const txt=await enc(o),n=Math.ceil(txt.length/CH),ver='v'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),col=hhCol();
-  for(let i=0;i<n;i++)await col.doc(ver+'_'+i).set({s:txt.slice(i*CH,(i+1)*CH)});
-  await col.doc('meta').set({ver,n,ts:Date.now(),len:txt.length,rows:(o.T||[]).length,by:CL.id});
-  const ck=await col.doc('meta').get();if(!ck.exists||ck.data().ver!==ver)return false;
-  setBase(o,ver,mod);
-  try{const q=await col.get(),old=Date.now()-6e5;for(const d of q.docs){const v=d.id.split('_')[0];if(d.id==='meta'||v===ver)continue;const t=parseInt(v.slice(1,9),36);if(v===prev||!(t>old))await col.doc(d.id).delete()}}catch(e){}
-  return true}
 /* Abgleich: neuen Stand der anderen holen, eigene Änderungen zusammenführen und speichern */
 async function clSync(){if(!CL.be||window.__demo)return;if(CL.busy){CL.again=true;return}CL.busy=true;
   try{for(let i=0;i<3;i++){
-      const rm=await be().meta(),bv=lsR('ua_bv')||'',mod=lsG('ua_mod'),dirty=bv?mod>lsG('ua_bmod'):(!rm||mod>(+rm.ts||0));
+      const rm=await GH.meta(),bv=lsR('ua_bv')||'',mod=lsG('ua_mod'),dirty=bv?mod>lsG('ua_bmod'):(!rm||mod>(+rm.ts||0));
       if(rm&&rm.ver!==bv){const R=await rm.read();
-        if(dirty&&ALL.length){let b=null;try{b=JSON.parse(lsR('ua_base')||'null')}catch(e){}const M=merge3(b||{S:R.S,T:[]},curObj(),R);applyQ(M);if(await be().push(M,rm.ver,mod)){toast('Änderungen zusammengeführt');break}continue}
+        if(dirty&&ALL.length){let b=null;try{b=JSON.parse(lsR('ua_base')||'null')}catch(e){}const M=merge3(b||{S:R.S,T:[]},curObj(),R);applyQ(M);if(await GH.push(M,rm.ver,mod)){toast('Änderungen zusammengeführt');break}continue}
         if(R.T&&R.T.length){applyQ(R);setBase(R,rm.ver,mod);if(bv)toast('Neuer Stand geladen')}break}
       if(!dirty||!ALL.length)break;
-      if(await be().push(curObj(),rm&&rm.ver,mod))break}
+      if(await GH.push(curObj(),rm&&rm.ver,mod))break}
     CL.st='ok';CL.last=Date.now()
-  }catch(e){CL.st='Cloud-Fehler: '+((e&&(e.code||e.message))||'unbekannt')}
+  }catch(e){CL.st='Fehler beim Abgleich: '+((e&&(e.code||e.message))||'unbekannt')}
   CL.busy=false;if(CL.again){CL.again=false;clSoon()}
   clUi()}
-/* Gemeinsamen Stand laden und eigene, noch nicht abgeglichene Änderungen verwerfen */
 async function ghConnect(repo,token){repo=String(repo||'').trim().replace(/^https?:\/\/github\.com\//,'').replace(/\.git$|\/$/g,'');token=String(token||'').trim();
   if(!/^[\w.-]+\/[\w.-]+$/.test(repo)||!token){toast('Bitte Repository (name/repo) und Token eingeben');return}
   const old=localStorage.getItem('ua_gh');localStorage.setItem('ua_gh',JSON.stringify({repo,token}));
   try{const r=await ghReq('');if(!r.ok)throw new Error(r.status===404||r.status===401?'Repository oder Token stimmt nicht':'GitHub '+r.status);const j=await r.json();if(!j.private)toast('Achtung: Das Repository ist öffentlich. Bitte auf privat stellen.');
     if(!(j.permissions&&j.permissions.push))throw new Error('Token darf nicht schreiben (Contents: Read and write)')}
   catch(e){if(old)localStorage.setItem('ua_gh',old);else localStorage.removeItem('ua_gh');toast(e.message||'Verbindung fehlgeschlagen');return}
-  CL.be='gh';lsT('ua_bv',null);lsT('ua_base',null);if(ALL.length)lsS('ua_mod',Date.now());await clSync();render(true);toast(CL.st==='ok'?'Verbunden':CL.st)}
-function ghOff(){lsT('ua_gh',null);lsT('ua_bv',null);lsT('ua_base',null);CL.be=CL.db?'claude':null;CL.st='';render(true);toast('Getrennt. Daten bleiben auf diesem Gerät.')}
-async function clReset(){if(!CL.be)return false;const rm=await be().meta();if(!rm)return false;const R=await rm.read();applyQ(R);setBase(R,rm.ver,lsG('ua_mod'));return true}
-/* Frühere private Sicherung lesen (nur beim Umzug in den gemeinsamen Bereich) */
-async function clPullOld(){const col=clOld(),m=await col.doc('meta').get();if(!m.exists)return false;const{n,ts}=m.data();let txt='';
-  for(let i=0;i<n;i++){const c=await col.doc('c'+i).get();if(!c.exists)throw new Error('Teil fehlt');txt+=c.data().s}
-  applyQ(await bkRead(txt));lsS('ua_mod',+ts||Date.now());return true}
+  CL.be='gh';lsT('ua_bv',null);lsT('ua_base',null);if(ALL.length)lsS('ua_mod',Date.now());await clSync();
+  if(ALL.length)render(true);toast(CL.st==='ok'?(ALL.length?'Verbunden':'Verbunden, aber noch keine gemeinsamen Daten'):CL.st)}
+function ghOff(){lsT('ua_gh',null);lsT('ua_bv',null);lsT('ua_base',null);CL.be=null;CL.st='';render(true);toast('Getrennt. Daten bleiben auf diesem Gerät.')}
+/* Gemeinsamen Stand laden und eigene, noch nicht abgeglichene Änderungen verwerfen */
+async function clReset(){if(!CL.be)return false;const rm=await GH.meta();if(!rm)return false;const R=await rm.read();applyQ(R);setBase(R,rm.ver,lsG('ua_mod'));return true}
+/* Startbildschirm: gleich mit dem gemeinsamen Stand verbinden */
+try{$('ghStart').innerHTML=`<details style='margin-top:14px;text-align:left'><summary>Schon gemeinsam gespeichert? Hier verbinden</summary><label class='mu'>Repository<input class='fi' id='gh_repo0' placeholder='name/finanzen-daten' autocapitalize='off' autocorrect='off' spellcheck='false'></label><label class='mu'>Token<input class='fi' id='gh_tok0' type='password' placeholder='github_pat_…' autocapitalize='off' autocorrect='off' spellcheck='false'></label><button id='gh_on0'>Verbinden</button></details>`;
+  $('gh_on0').onclick=()=>ghConnect($('gh_repo0').value,$('gh_tok0').value)}catch(e){}
 async function clInit(){
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
-  if(window.__demo)return;
-  if(ghCfg()){CL.be='gh';await clSync();clUi();return}
-  if(!window.claude||!window.claude.use)return;
-  try{
-    const[db,user]=await Promise.all([window.claude.use('db'),window.claude.use('user')]);
-    if(!db||!user){clUi();return}
-    CL.db=db;CL.be='claude';CL.id=await user.id();
-    const m=await hhCol().doc('meta').get();
-    if(!m.exists){const om=await clOld().doc('meta').get(),cm=om.exists?(+om.data().ts||0):0;
-      if(om.exists&&(!ALL.length||cm>lsG('ua_mod')))await clPullOld();
-      if(ALL.length){lsT('ua_bv',null);lsS('ua_mod',Date.now())}}
-    await clSync()
-  }catch(e){CL.st='Cloud-Fehler: '+((e&&(e.code||e.message))||'unbekannt')}
-  clUi()}
+  if(window.__demo||!ghCfg())return;CL.be='gh';await clSync();clUi()}
 try{document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&CL.tm){clearTimeout(CL.tm);CL.tm=null;clSync()}else if(document.visibilityState==='visible')clSync()})}catch(e){}
+/* Offline: die App merkt sich selbst auf dem Gerät (sw.js), startet also auch ohne Internet */
+try{if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}
 /* ===== 8 Start ===== */
 rebuildCats();lastSS=SS();
 try{const z=JSON.parse(localStorage.getItem('ua_data')||'null');if(z&&z.T&&z.T.length){H=NH;T=up6(z.T);M=M6;if(!ACC.length)ACC.push({id:'a0',name:'Girokonto',type:'giro',iban:''});buildMap();build()}}catch(e){}
