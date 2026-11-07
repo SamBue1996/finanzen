@@ -545,6 +545,7 @@ function impDone(nr){const now=Date.now(),res={};LI.accs=LI.accs||{};
   nr.forEach(r=>{const o=res[r.acc]||(res[r.acc]={n:0,last:0});if(!impOld.has(r.k))o.n++;if(+r.d>o.last)o.last=+r.d});
   Object.keys(impIn||{}).forEach(id=>{const o=res[id]||{n:0,last:0};LI.accs[id]={ts:now,n:o.n,dup:Math.max(0,impIn[id]-o.n),last:o.last}});
   LI.show=true;saveLI();
+  {const tn0=Object.values(LI.accs).filter(x=>x.ts===now).reduce((x,y)=>x+y.n,0);AN.imp={t:now,n:tn0};save()}
   const tn=Object.values(LI.accs).filter(x=>x.ts===now).reduce((x,y)=>x+y.n,0),td=Object.values(LI.accs).filter(x=>x.ts===now).reduce((x,y)=>x+y.dup,0);
   try{setTimeout(()=>toast(tn?`${tn} neue Umsätze importiert${td?`. ${td} kenne ich schon.`:'.'}`:(td?`Nichts Neues: ${td} Umsätze kenne ich schon.`:'Keine Umsätze gefunden.')),0)}catch(e){}}
 const lastBk=id=>{let m=0;ALL.forEach(r=>{if(r.acc===id&&+r.d>m)m=+r.d});return m};
@@ -557,10 +558,16 @@ function impCard(){if(!ACC.length||!ALL.length)return'';const L=LI.accs||{},now=
   const line=ag.map(x=>`${esc(x.a.name)} ${x.days<=0?'heute':'vor '+x.days+' Tag'+(x.days===1?'':'en')}`).join(' · ');
   return (res?`<div class='box thx'><b>Import fertig</b>${res}<button class='g' data-act='impok' style='margin-top:8px'>Verstanden</button></div>`:'')+`<p class='sm ${old?'wn':'mu'}' style='margin:0 0 8px'>${old?'⚠ ':''}Zuletzt ${ag.some(x=>!x.imp)?'(Umsatz/Import) ':'importiert: '}${line}${old&&ne?'. Nächster Export ab '+dmy(ne)+'.':''}</p>`}
 /* Übersicht: Importstatus nur, wenn es etwas zu tun gibt */
+/* Unklare Umsätze: Ausgaben der letzten 90 Tage ohne erkennbaren Händler (PayPal ohne Namen) oder in „Sonstiges“, die noch niemand zugeordnet hat */
+const isUnc=r=>!r.tr&&r.amt<0&&!r.man&&!tov[r.k]&&!TXPRE[r.k]&&(r.cat==='Sonstiges'||/^(Unbekannt|PayPal)$/.test(r.mer));
+function uncRows(){const last=Math.max(...ALL.map(r=>+r.d));return ALL.filter(r=>isUnc(r)&&last-r.d<=90*864e5)}
+function uncBox(){const U=uncRows();return U.length?`<div class='stale go' data-act='unclr'><span>${U.length===1?'Ein Umsatz ist':U.length+' Umsätze sind'} für mich unklar</span><b>Zuordnen ›</b></div>`:''}
+function impLine(){const t=(AN.imp&&AN.imp.t)||Math.max(0,...Object.values(LI.accs||{}).map(x=>+x.ts||0));const last=Math.max(...ALL.map(r=>+r.d));if(!t)return `<p class='mu sm imp-l'>Umsätze bis ${dmy(last)}</p>`;
+  const d=Math.floor((Date.now()-t)/864e5);return `<p class='mu sm imp-l'>Letzter Import ${d===0?'heute':d===1?'gestern':'am '+dmy(t)}${AN.imp&&AN.imp.t===t?' · '+AN.imp.n+' neue':''} · Umsätze bis ${dmy(last)}</p>`}
 function impMini(){if(!ACC.length||!ALL.length)return '';const L=LI.accs||{},now=Date.now();
   const res=LI.show?ACC.filter(a=>L[a.id]&&L[a.id].n!=null&&now-L[a.id].ts<36e5*24*3).map(a=>`<p class='sm' style='margin:6px 0 0'><b>${esc(a.name)}</b>: ${L[a.id].n} neue Umsätze, neuester ${dmy(L[a.id].last)}</p>`).join(''):'';
   const main=ACC.slice().sort((a,b)=>ALL.filter(r=>r.acc===b.id).length-ALL.filter(r=>r.acc===a.id).length)[0],t=L[main.id]&&L[main.id].ts,days=Math.floor((now-Math.max(t||0,+lastBk(main.id)||0))/864e5);
-  return (res?`<div class='box thx'><b>Import fertig</b>${res}<button class='g' data-act='impok' style='margin-top:8px'>Verstanden</button></div>`:'')+(days>=14?`<div class='stale go' data-act='merge'><span>Letzte Umsätze vor ${days} Tagen</span><b>Importieren ›</b></div>`:'')}
+  return impLine()+(res?`<div class='box thx'><b>Import fertig</b>${res}<button class='g' data-act='impok' style='margin-top:8px'>Verstanden</button></div>`:'')+(days>=14?`<div class='stale go' data-act='merge'><span>Letzte Umsätze vor ${days} Tagen</span><b>Importieren ›</b></div>`:'')}
 function exportHint(){const ne=nextExport();return `<div class='box'><b>Nächster Export</b><p class='sm' style='margin:6px 0 0'>In der VR-App die Umsätze als CSV exportieren, wenn angeboten. Das geht schneller und genauer als PDF. ${ne?'Zeitraum ab <b>'+dmy(ne)+'</b>, ein paar Tage Überlappung sind gewollt.':''} Doppelte Buchungen erkennt die App selbst. Dann hier „Konto / Umsätze hinzufügen“. Mehrere Dateien kannst du auf einmal auswählen.</p></div>`}
 function tabAcc0(){const nt=ALL.filter(r=>r.tr).length;
   return `<div class='box'><b>Konten</b>${ACC.length?ACC.map(a=>`<div class='rr'><div><b>${esc(a.name)}</b><small>${ATYPE[a.type]||''}${a.iban?' · '+esc(a.iban.slice(0,4)+' •••• '+a.iban.slice(-4)):''} · ${ALL.filter(r=>r.acc===a.id).length} Umsätze</small>${chkLine(a)}</div><button class='g' data-ae='${a.id}'>Bearbeiten</button></div>`).join(''):`<p class='mu' style='margin:8px 0 0'>Noch kein Konto.</p>`}<p class='mu' style='margin:10px 0 4px'>${nt?`${nt} Umbuchungen erkannt. Sie zählen weder als Einnahme noch als Ausgabe.`:'Weitere Konten fügst du unter „Daten“ mit „Konto / Umsätze hinzufügen“ hinzu. Umbuchungen zwischen deinen Konten werden dann automatisch erkannt.'}</p>${nt?`<button class='g' data-act='showtr'>Umbuchungen ansehen</button>`:''}</div>`}
@@ -689,7 +696,7 @@ const isKB=r=>{const v=-r.amt;return r.amt<0&&v>=NV('kbMin')&&v<=NV('kbMax')&&kb
 const isGT=r=>{const v=-r.amt;return r.amt<0&&r.mer==='Geldautomat'&&(v>=NV('gtMin')&&v<=NV('gtMax'))};
 const FIX=new Set(['Wohnen','Telefon & Internet','Sparen & Anlage','Kirche & Gemeinde']);const NOB=new Set(['Wohnen','Versicherung','Telefon & Internet','Abos & Streaming','Gebühren & Steuern','Kirche & Gemeinde','Überweisungen & Daueraufträge']);const inBud=r=>(r.amt<0||r.rf)&&!r.sp&&r.cat!=='Sparen & Anlage'&&(!NOB.has(r.cat)||asg().has(r.cat));let BC=CN.filter(c=>c!=='Sparen & Anlage'&&c!=='Umbuchung'&&!NOB.has(c));
 const STS={thr:{n:'Jahresposten ab',d:150,min:20,u:'€',step:10},thrS:{n:'Shopping & Einrichtung ab',d:80,min:20,u:'€',step:10},bigAb:{n:'Immer Jahresposten ab',d:1000,min:100,u:'€',step:100},vacAb:{n:'Freizeit wird Urlaub ab',d:100,min:20,u:'€',step:10},hotelAb:{n:'Hotel wird Urlaub ab',d:50,min:0,u:'€',step:10},kbMin:{n:'Kinderbetreuung von',d:20,min:1,u:'€',step:5},kbMax:{n:'Kinderbetreuung bis',d:40,min:1,u:'€',step:5},gtMin:{n:'Gemeinschaftstag von',d:450,min:50,u:'€',step:10},gtMax:{n:'Gemeinschaftstag bis',d:650,min:50,u:'€',step:10},zhAb:{n:'Auszahlung fürs Geben ab',d:250,min:50,u:'€',step:10},tithe:{n:'Zehnt-Ziel',d:10,min:0,max:100,u:'%',step:1},titheEur:{n:'Zehnt pro Monat',d:0,min:0,u:'€',step:10},bonus:{n:'13. Gehalt im Dezember',d:3100,min:0,u:'€',step:50}};
-let tab='ueb',mon='',thr=150,AN={bonus:3100,rate:6,yrs:20,sav:null,car:null,base:'recent',mode:'year',goal:null,tithe:10,trips:[],tcats:['Freizeit','Restaurants & Lieferdienste','Sonstiges'],thrS:80,cust:{},vac:0,yr:{},cy:[]},B=[],tov={},RS=new Set,MI=[],drill=null,editB=null,alle=false,rules={},CT={},MC=[],openC=null,addC=false,mergeNext=false,saveErr=false,wipeArm=false,UR=[],msub='',pend=null,erule=null,CYC={mode:'sal',src:null,day:15,auto:null},CY=[],CYM={},CYLEN=30,UC=[],LK={},LKM={},SPL={},etx=null,ect=null,CTS=[],CMAP={},spD={amt:'',cat:'Kinderbetreuung'},ctScope='one',sdeb=null,VER='3.24',KV=0,RU=null,usrch=false,ONE={},ovsub='aus',ACC=[],accF='',ALL=[],VR=[],pendAcc='a0',newAccs=[],eacc=null,accArm=false;
+let tab='ueb',mon='',thr=150,AN={bonus:3100,rate:6,yrs:20,sav:null,car:null,base:'recent',mode:'year',goal:null,tithe:10,trips:[],tcats:['Freizeit','Restaurants & Lieferdienste','Sonstiges'],thrS:80,cust:{},vac:0,yr:{},cy:[]},B=[],tov={},RS=new Set,MI=[],drill=null,editB=null,alle=false,rules={},CT={},MC=[],openC=null,addC=false,mergeNext=false,saveErr=false,wipeArm=false,UR=[],msub='',pend=null,erule=null,CYC={mode:'sal',src:null,day:15,auto:null},CY=[],CYM={},CYLEN=30,UC=[],LK={},LKM={},SPL={},etx=null,ect=null,CTS=[],CMAP={},spD={amt:'',cat:'Kinderbetreuung'},ctScope='one',sdeb=null,VER='3.26',KV=0,RU=null,usrch=false,ONE={},ovsub='aus',ACC=[],accF='',ALL=[],VR=[],pendAcc='a0',newAccs=[],eacc=null,accArm=false;
 let impFlag=false,impIn=null,impSkip=false,impOld=new Set,LI=(()=>{try{return JSON.parse(localStorage.getItem('ua_imp')||'{}')||{}}catch(e){return{}}})();const saveLI=()=>{try{localStorage.setItem('ua_imp',JSON.stringify(LI))}catch(e){}};
 try{const s=JSON.parse(localStorage.getItem('ua2')||'{}');B=s.B||[];thr=s.thr||150;if(s.AN)Object.assign(AN,s.AN);tov=s.tov||{};rules=s.rules||{};try{const O='Freizeit & Reisen',N='Freizeit';Object.keys(tov).forEach(k=>{if(tov[k]===O)tov[k]=N});Object.keys(rules).forEach(k=>{if(rules[k]===O)rules[k]=N});(s.UR||[]).forEach(u=>{if(u.cat===O)u.cat=N});(s.B||[]).forEach(x=>{x.cats=(x.cats||[]).map(c=>c===O?N:c);if(x.name===O)x.name=N});if(AN.cust&&AN.cust[O]!=null){AN.cust[N]=AN.cust[O];delete AN.cust[O]}}catch(e){}CT=s.CT||{};MC=s.MC||[];UR=s.UR||[];if(s.CYC)Object.assign(CYC,s.CYC);ACC=s.ACC||[];UC=s.UC||[];LK=s.LK||{};LKM=s.LKM||{};SPL=s.SPL||{};ONE=s.ONE||{};KV=s.KV||0;RU=s.RU||null}catch(e){}
 const SS=()=>JSON.stringify({KV,RU,UC,LK,LKM,SPL,ONE,ACC,B,thr,AN,tov,rules,CT,MC,UR,CYC:{mode:CYC.mode,src:CYC.src,day:CYC.day}});
@@ -961,6 +968,7 @@ on($('out'),'click',e=>{if(e.target.closest('select,option,input,textarea'))retu
   else if(d.act==='streset'){Object.keys(STS).forEach(k=>{if(k==='thr')thr=STS.thr.d;else delete AN[k]});delete AN.spCat;save();toast('Alle Werte auf Standard')}
   else if(d.act==='tripsug'){const x=tripSuggest()[+d.i];if(x){AN.trips=AN.trips||[];AN.trips.push({id:Date.now().toString(36),name:LAND[x.land].n,from:x.from,to:x.to,land:x.land});save()}}
   else if(d.act==='tripcat'){AN.tcats=AN.tcats||[];AN.tcats=AN.tcats.includes(d.c)?AN.tcats.filter(x=>x!==d.c):AN.tcats.concat(d.c);save()}
+  else if(d.act==='unclr'){jset=new Set(uncRows().map(r=>r.k));jlab='Unklar';ucat='';umon='';uq='';utype='';usp='';ubud='';uamin='';usrch=false;ufil=false;tab='ums';ulim=100;render(false);scrollTo(0,0);return}
   else if(d.act==='tripshow'){const t=(AN.trips||[]).find(x=>x.id===d.tid);if(t){jset=new Set(tripRows(t).map(r=>r.k));jlab=(t.name||'Urlaub')+' '+fdI(t.from).slice(0,6)+'–'+fdI(t.to).slice(0,6);ucat='';umon='';uq='';utype='';usp='';ubud='';uamin='';usrch=false;ufil=false;tab='ums';ulim=100;scrollTo(0,0)}}
   else if(d.act==='tripedit'){window.TEDIT=d.tid||null;window.URLOPEN=1}
   else if(d.act==='tripsave'){const t=(AN.trips||[]).find(x=>x.id===d.tid),f=$('te-f').value,to=$('te-t').value;if(!t)return;if(!f||!to||to<f){toast('Bitte Von und Bis prüfen');return}t.name=$('te-n').value.trim();t.from=f;t.to=to;t.land=$('te-l').value;window.TEDIT=null;window.URLOPEN=1;save();toast('Urlaub gespeichert')}
@@ -974,6 +982,8 @@ on($('out'),'click',e=>{if(e.target.closest('select,option,input,textarea'))retu
   else if(d.act==='merge'){mergeNext=true;$('drop').classList.remove('hide');$('err').textContent='Wähle die neue Datei. Die Umsätze werden zu den gespeicherten hinzugefügt, Duplikate übersprungen.';scrollTo(0,0);return}
   else if(d.act==='new'){mergeNext=false;$('drop').classList.remove('hide');$('err').textContent='';scrollTo(0,0);return}
   else if(d.act==='expcsv'){expSave('umsaetze-'+isoD(new Date())+'.csv',expCsv())}
+  else if(d.act==='ghon'){ghConnect($('gh_repo').value,$('gh_tok').value);return}
+  else if(d.act==='ghoff'){ghOff();return}
   else if(d.act==='clpush'){clSync().then(()=>toast(CL.st==='ok'?'Abgeglichen':'Abgleich fehlgeschlagen'))}
   else if(d.act==='clpull'){if(!clpArm){clpArm=true;render(true)}else{clpArm=false;clReset().then(o=>{toast(o?'Gemeinsamer Stand geladen':'Noch kein gemeinsamer Stand');render(true)}).catch(()=>toast('Laden fehlgeschlagen'))}}
   else if(d.act==='wipe'){if(!wipeArm)wipeArm=true;else{try{localStorage.removeItem('ua_data')}catch(e){}wipeArm=false;rows=[];$('app').classList.add('hide');$('nav').classList.add('hide');$('drop').classList.remove('hide');$('intro').classList.remove('hide');$('steps').classList.remove('hide');$('h1').classList.remove('hide');$('out').innerHTML='';return}}
@@ -1132,6 +1142,7 @@ function sheetTx(k){const r=ALL.find(x=>x.k===k);if(!r)return;etx=k;
   openSheet(`<div class='txh'>${av(r.mer,col,r.tr?'Umbuchung':(r.amt>0&&!r.rf?'Einnahmen':r.cat))}<h3>${esc(DM(r.mer))}</h3><div class='txa ${r.amt<0?'':'pos'}'>${r.amt<0?'−':'+'}${eur2(Math.abs(r.amt))}</div><p class='mu'>${r.d.toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}${ACC.length>1?' · '+esc(accName(r.acc)):''}</p></div>
   ${r.tr?`<div class='txg'><div class='txr'><span class='mu'>${r.neu?'Zählt nicht':'Umbuchung'}</span><b>${r.neu?esc(r.neu)+(r.np?` <small class='mu'>${r.amt<0?'zurück':'gekauft'} am ${r.np.d.toLocaleDateString('de-DE')}</small>`:''):r.pair?'⇄ '+esc(accName(r.pair.acc)):'zwischen eigenen Konten'}</b></div></div><button class='g' data-sa='tnt'>${r.neu?'Doch mitzählen':'Keine Umbuchung'}</button>`:`<div class='txg'><label class='txr'><span class='mu'>Kategorie</span><select data-sc>${r.amt<0?CN.map(x=>`<option${x===r.cat?' selected':''}>${x}</option>`).join('')+NEWOPT:['Einnahmen','Umbuchung'].map(x=>`<option${!r.rf&&x===r.cat?' selected':''}>${x}</option>`).join('')+`<optgroup label='Erstattung für …'>${CN.filter(c=>!['Sparen & Anlage','Umbuchung','Einnahmen'].includes(c)).map(c=>`<option value='${esc(c)}'${r.rf&&r.cat===c?' selected':''}>Erstattung: ${esc(c)}</option>`).join('')}</optgroup>`}</select></label>
   ${r.amt<0?`<div class='txr go' data-sa='ctpick'><span class='mu'>Vertrag</span><b class='${c?'':'mu'}'>${c?esc(c.name)+` <small class='mu'>${IVL[c.iv]}</small>`:'Keiner'} ›</b></div><div class='txr go' data-sa='split'><span class='mu'>Aufteilen</span><b class='mu'>${sp.length?sp.length+' Teile':'Nein'} ›</b></div>`:''}${(()=>{const H=ALL.filter(x=>x.mer===r.mer&&!x.tr);if(H.length<2)return '';const t=H.reduce((a,x)=>a+x.amt,0);return `<div class='txr go' data-sa='txall'><span class='mu'>Bei ${esc(DM(r.mer))}</span><b class='mu'>${H.length} Umsätze · ${t<0?'−':'+'}${eur(Math.abs(t))} ›</b></div>`})()}</div>${bkH}`}
+  ${isUnc(r)?`<button class='g' data-sa='tok'>Passt so (${esc(r.cat)})</button>`:''}
   ${LK[k]||LKM[r.mer]?`<button class='g' data-sa='ctun'>Vertragszuordnung lösen</button>`:''}
   <details class='txt'><summary>Buchungstext</summary><div class='mu'>${esc(raw.slice(0,500))}${DM(r.mer)!==r.mer?`<br><small>Empfänger im Kontoauszug: ${esc(r.mer)}</small>`:''}</div></details>
   <button data-sa='tclose'>Schließen</button>`)}
@@ -1204,7 +1215,7 @@ function yearView(){let A,P;try{A=anaData();P=planData(A)}catch(e){return ''}con
 function tabUeb(){
   if(ovsub!=='jahr')ovsub='aus';const w=`<section data-t="ueb">${drill?'':ovSeg()}`;
   if(ovsub==='jahr')return w+impMini()+yearView()+'</section>';
-  return w+(drill?'':impMini()+monChips()+resBox()+remindBox()+gapBox()+`<h3 class='hm-h'>Budgets</h3>`)+tabMonat()+(drill?'':spMonBox())+'</section>'}
+  return w+(drill?'':impMini()+uncBox()+monChips()+resBox()+remindBox()+gapBox()+`<h3 class='hm-h'>Budgets</h3>`)+tabMonat()+(drill?'':spMonBox())+'</section>'}
 /* ===== Budget (Monat) ===== */
 function tabMonat(){
   const R=rows.filter(r=>r.m===mon),inB=R.filter(inBud);
@@ -1359,7 +1370,10 @@ function setBar(){const g=cashG(),D=kbDays();
    +SG('Geben',SR('Abhebung fürs Geben ab','Zählt zu Zehnt & Gaben.',NUM('zhAb')),cntT(g.zh))
    +SG('',SR('Alle anderen Abhebungen','Bleiben Bargeld im Monatsbudget.',`<button class='lk' data-cu='Geldautomat'>${g.ba.length}× ansehen ›</button>`))}
 function setUrl(){return SG('Freizeit und Hotels',SR('Freizeit wird Urlaub ab','Tierpark, Schwimmbad, Kino und Ähnliches.',NUM('vacAb'))+SR('Hotel wird Urlaub ab','Darunter (z. B. ein Kaffee im Hotel) bleibt es Freizeit.',NUM('hotelAb')))+`<div class='urlx'>${tabUrlaub()}</div>`}
-function setDat(){return impCard()+tabAcc0()+dupBox()+exportHint()+`<div class='box'><b>Daten</b><p class='mu sm' style='margin:4px 0'>${ALL.length} Buchungen · ${window.__demo?'Beispieldaten (werden nicht gespeichert)':saveErr?'Speichern im Browser nicht möglich':'auf diesem Gerät gespeichert'}</p>${clLine()}<div class='bt'><button data-act='merge'>Konto / Umsätze hinzufügen</button><button class='g' data-act='expcsv'>Umsätze exportieren (CSV)</button></div>${CL.db?`<div class='bt'><button class='g' data-act='clpush'>Jetzt abgleichen</button><button class='g' data-act='clpull'>${clpArm?'Eigene ungespeicherte Änderungen verwerfen?':'Gemeinsamen Stand neu laden'}</button></div>`:''}</div>`+tabBk()+`<div class='box dz'><b>Neu anfangen</b><p class='mu sm' style='margin:4px 0 8px'>Ersetzt oder löscht alle Umsätze auf diesem Gerät.</p><div class='bt'><button class='g' data-act='new'>Durch neue Datei ersetzen</button><button class='g' data-act='wipe'>${wipeArm?'Wirklich alles löschen?':'Alle Daten löschen'}</button></div></div>`}
+function ghBox(){const g=ghCfg();if(window.__demo)return '';
+  if(g)return `<div class='box'><b>Gemeinsam speichern</b><p class='mu sm' style='margin:4px 0'>Verbunden mit GitHub · ${esc(g.repo)}. Jede Änderung wird dort gespeichert und auf allen verbundenen Handys abgeglichen.</p><div class='bt'><button class='g' data-act='ghoff'>Trennen</button></div></div>`;
+  return `<details class='box'><summary>Gemeinsam speichern</summary><p class='mu sm'>Damit ihr beide denselben Stand habt: privates GitHub-Repository und Zugangs-Token eintragen. Der Zugang bleibt nur auf diesem Gerät.</p><label class='mu'>Repository<input class='fi' id='gh_repo' placeholder='name/finanzen-daten' autocapitalize='off' autocorrect='off' spellcheck='false'></label><label class='mu'>Token<input class='fi' id='gh_tok' type='password' placeholder='github_pat_…' autocapitalize='off' autocorrect='off' spellcheck='false'></label><button data-act='ghon'>Verbinden</button></details>`}
+function setDat(){return impCard()+tabAcc0()+dupBox()+exportHint()+`<div class='box'><b>Daten</b><p class='mu sm' style='margin:4px 0'>${ALL.length} Buchungen · ${window.__demo?'Beispieldaten (werden nicht gespeichert)':saveErr?'Speichern im Browser nicht möglich':'auf diesem Gerät gespeichert'}</p>${clLine()}<div class='bt'><button data-act='merge'>Konto / Umsätze hinzufügen</button><button class='g' data-act='expcsv'>Umsätze exportieren (CSV)</button></div>${CL.be?`<div class='bt'><button class='g' data-act='clpush'>Jetzt abgleichen</button><button class='g' data-act='clpull'>${clpArm?'Eigene ungespeicherte Änderungen verwerfen?':'Gemeinsamen Stand neu laden'}</button></div>`:''}</div>`+ghBox()+tabBk()+`<div class='box dz'><b>Neu anfangen</b><p class='mu sm' style='margin:4px 0 8px'>Ersetzt oder löscht alle Umsätze auf diesem Gerät.</p><div class='bt'><button class='g' data-act='new'>Durch neue Datei ersetzen</button><button class='g' data-act='wipe'>${wipeArm?'Wirklich alles löschen?':'Alle Daten löschen'}</button></div></div>`}
 function tabMehr(){
   if(msub==='log'||msub==='auf')msub='';if(msub==='sic')msub='dat';if(msub==='mb')msub='inc';if(msub==='urlaub')msub='url';
   const pages={inc:['Einnahmen & Zehnt',setInc],kat:['Budgets & Kategorien',tabKat],sp:['Jahresposten',setSp],bar:['Bargeld & Babysitter',setBar],url:['Urlaub',setUrl],dat:['Konten & Daten',setDat]},pg=pages[msub];
@@ -1495,6 +1509,7 @@ on($('sheet'),'click',e=>{
   else if(a==='tsp'){const r=rows.find(x=>x.k===etx)||ALL.find(x=>x.k===etx);ONE[etx]=!r.sp;save();closeSheet();render();toast(ONE[etx]?'Zählt jetzt als Jahresposten':'Zählt jetzt als Alltag')}
   else if(a==='tone'){const r=ALL.find(x=>x.k===etx);ONE[etx]=!r.one;save();closeSheet();render();toast(ONE[etx]?'Als einmalig markiert':'Wieder mitgerechnet')}
   else if(a==='tclose')closeSheet();
+  else if(a==='tok'){const r=ALL.find(x=>x.k===etx);tov[etx]=r.cat;save();closeSheet();render();toast('Gemerkt: '+r.cat)}
   else if(a==='cashnew'){cashArm=false;sheetCash()}
   else if(a==='cashsave'){const f=n=>(document.querySelector(`[data-cf='${n}']`)||{}).value||'',v=Math.round(parseFloat(f('a').replace(/\./g,'').replace(',','.'))*100)/100,d=f('d');if(!(v>0)){toast('Bitte einen Betrag eingeben');return}if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){toast('Bitte ein Datum wählen');return}AN.cash=[...(AN.cash||[]),{id:Date.now().toString(36),d,a:v,n:f('n').trim().slice(0,40)}];save();closeSheet();render();toast(eur2(v)+' bar erhalten eingetragen')}
   else if(a==='cashdel'){if(!cashArm){cashArm=true;sheetTx(etx);return}const r=ALL.find(x=>x.k===etx);cashArm=false;AN.cash=(AN.cash||[]).filter(x=>x.id!==r.man);save();closeSheet();render();toast('Eintrag gelöscht')}
@@ -1701,10 +1716,24 @@ const CL={db:null,id:null,st:'',last:0,busy:false,again:false,tm:null,quiet:fals
 const lsG=k=>{try{return +localStorage.getItem(k)||0}catch(e){return 0}},lsS=(k,v)=>{try{localStorage.setItem(k,String(v))}catch(e){}};
 const lsR=k=>{try{return localStorage.getItem(k)}catch(e){return null}},lsT=(k,v)=>{try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}};
 const hhCol=()=>CL.db.collection('hh'),clOld=()=>CL.db.collection('data/users/'+CL.id);
+/* Speicherorte für den gemeinsamen Stand: Claude-Datenbank (hh/) oder eine Datei in einem privaten GitHub-Repository.
+   GitHub: Zugang (Repository + Token) liegt nur auf dem Gerät (ua_gh), nie im Code oder in der Sicherung. Die Datei-Version (sha) schützt vor Überschreiben. */
+const ghCfg=()=>{try{return JSON.parse(localStorage.getItem('ua_gh')||'null')}catch(e){return null}},GHF='finanzen-daten.json';
+async function ghReq(path,opt){const g=ghCfg();const r=await fetch('https://api.github.com/repos/'+g.repo+path,{cache:'no-store',...opt,headers:{Authorization:'Bearer '+g.token,Accept:'application/vnd.github+json',...(opt&&opt.headers||{})}});if(r.status===401&&path)throw new Error('GitHub-Token abgelaufen oder ungültig: unter Mehr › Daten trennen und neu verbinden');return r}
+const u8b64=t=>b64(new TextEncoder().encode(t)),b64u8=t=>{const b=atob(t.replace(/\s/g,'')),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return new TextDecoder().decode(u)};
+const BE={
+  claude:{meta:async()=>{const m=await hhCol().doc('meta').get();if(!m.exists)return null;const d=m.data();return{ver:d.ver,ts:d.ts,read:()=>hhRead(d)}},push:(o,prev,mod)=>hhPush(o,prev,mod)},
+  gh:{meta:async()=>{const r=await ghReq('/contents/'+GHF);if(r.status===404)return null;if(!r.ok)throw new Error('GitHub '+r.status);const j=await r.json();
+      let c=j.content;if(!c||j.encoding!=='base64'){const r2=await ghReq('/git/blobs/'+j.sha);if(!r2.ok)throw new Error('GitHub '+r2.status);c=(await r2.json()).content}
+      const d=JSON.parse(b64u8(c));return{ver:j.sha,ts:d.ts,read:()=>bkRead(d.s)}},
+    push:async(o,prev,mod)=>{const s=await enc(o),body={message:'Stand '+new Date().toLocaleString('de-DE'),content:u8b64(JSON.stringify({ts:Date.now(),rows:(o.T||[]).length,s}))};if(prev)body.sha=prev;
+      const r=await ghReq('/contents/'+GHF,{method:'PUT',body:JSON.stringify(body),headers:{'Content-Type':'application/json'}});
+      if(r.status===409||r.status===422)return false;if(!r.ok)throw new Error('GitHub '+r.status);const j=await r.json();setBase(o,j.content.sha,mod);return true}}};
+const be=()=>BE[CL.be];
 const clUi=()=>{try{if(tab==='mehr'&&msub==='dat')render(true)}catch(e){}};
-function clLine(){const t=CL.db?(CL.st==='ok'?'Gemeinsam gespeichert · zuletzt abgeglichen '+new Date(CL.last).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+' Uhr':CL.st==='ausstehend'?'Änderungen werden gleich gespeichert':CL.st||'Verbinde mit der Cloud …'):'';return (t?`<p class='mu sm' style='margin:4px 0'>${esc(t)}</p>`:'')+(CL.db?`<p class='mu sm' style='margin:4px 0'>Gemeinsam nutzen: im Teilen-Menü per E-Mail als Bearbeiter einladen.</p>`:'')}
+function clLine(){const t=CL.be?(CL.st==='ok'?'Gemeinsam gespeichert · zuletzt abgeglichen '+new Date(CL.last).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+' Uhr':CL.st==='ausstehend'?'Änderungen werden gleich gespeichert':CL.st||'Verbinde …'):'';return (t?`<p class='mu sm' style='margin:4px 0'>${esc(t)}</p>`:'')+(CL.be==='claude'?`<p class='mu sm' style='margin:4px 0'>Gemeinsam nutzen: im Teilen-Menü per E-Mail als Bearbeiter einladen.</p>`:'')}
 function clMod(){if(CL.quiet||window.__demo)return;lsS('ua_mod',Date.now());clSoon()}
-function clSoon(){if(!CL.db||window.__demo)return;CL.st='ausstehend';clearTimeout(CL.tm);CL.tm=setTimeout(()=>{CL.tm=null;clSync()},4000)}
+function clSoon(){if(!CL.be||window.__demo)return;CL.st='ausstehend';clearTimeout(CL.tm);CL.tm=setTimeout(()=>{CL.tm=null;clSync()},4000)}
 const enc=async o=>{const j=JSON.stringify(o);try{return 'UA1:'+b64(await gz(j))}catch(e){return 'UA0:'+j}};
 /* Dreiseitig zusammenführen: was ich seit dem gemeinsamen Stand geändert habe, gewinnt; sonst gilt der andere Stand. Listen mit id werden Eintrag für Eintrag zusammengeführt. */
 const jeq=(a,b)=>JSON.stringify(a)===JSON.stringify(b),isOb=x=>x&&typeof x==='object'&&!Array.isArray(x),isIdA=a=>Array.isArray(a)&&a.every(x=>isOb(x)&&x.id!=null);
@@ -1727,31 +1756,41 @@ async function hhPush(o,prev,mod){const txt=await enc(o),n=Math.ceil(txt.length/
   try{const q=await col.get(),old=Date.now()-6e5;for(const d of q.docs){const v=d.id.split('_')[0];if(d.id==='meta'||v===ver)continue;const t=parseInt(v.slice(1,9),36);if(v===prev||!(t>old))await col.doc(d.id).delete()}}catch(e){}
   return true}
 /* Abgleich: neuen Stand der anderen holen, eigene Änderungen zusammenführen und speichern */
-async function clSync(){if(!CL.db||window.__demo)return;if(CL.busy){CL.again=true;return}CL.busy=true;
+async function clSync(){if(!CL.be||window.__demo)return;if(CL.busy){CL.again=true;return}CL.busy=true;
   try{for(let i=0;i<3;i++){
-      const m=await hhCol().doc('meta').get(),rm=m.exists?m.data():null,bv=lsR('ua_bv')||'',mod=lsG('ua_mod'),dirty=bv?mod>lsG('ua_bmod'):(!rm||mod>(+rm.ts||0));
-      if(rm&&rm.ver!==bv){const R=await hhRead(rm);
-        if(dirty&&ALL.length){let b=null;try{b=JSON.parse(lsR('ua_base')||'null')}catch(e){}const M=merge3(b||{S:R.S,T:[]},curObj(),R);applyQ(M);if(await hhPush(M,rm.ver,mod)){toast('Änderungen zusammengeführt');break}continue}
+      const rm=await be().meta(),bv=lsR('ua_bv')||'',mod=lsG('ua_mod'),dirty=bv?mod>lsG('ua_bmod'):(!rm||mod>(+rm.ts||0));
+      if(rm&&rm.ver!==bv){const R=await rm.read();
+        if(dirty&&ALL.length){let b=null;try{b=JSON.parse(lsR('ua_base')||'null')}catch(e){}const M=merge3(b||{S:R.S,T:[]},curObj(),R);applyQ(M);if(await be().push(M,rm.ver,mod)){toast('Änderungen zusammengeführt');break}continue}
         if(R.T&&R.T.length){applyQ(R);setBase(R,rm.ver,mod);if(bv)toast('Neuer Stand geladen')}break}
       if(!dirty||!ALL.length)break;
-      if(await hhPush(curObj(),rm&&rm.ver,mod))break}
+      if(await be().push(curObj(),rm&&rm.ver,mod))break}
     CL.st='ok';CL.last=Date.now()
   }catch(e){CL.st='Cloud-Fehler: '+((e&&(e.code||e.message))||'unbekannt')}
   CL.busy=false;if(CL.again){CL.again=false;clSoon()}
   clUi()}
 /* Gemeinsamen Stand laden und eigene, noch nicht abgeglichene Änderungen verwerfen */
-async function clReset(){if(!CL.db)return false;const m=await hhCol().doc('meta').get();if(!m.exists)return false;const rm=m.data(),R=await hhRead(rm);applyQ(R);setBase(R,rm.ver,lsG('ua_mod'));return true}
+async function ghConnect(repo,token){repo=String(repo||'').trim().replace(/^https?:\/\/github\.com\//,'').replace(/\.git$|\/$/g,'');token=String(token||'').trim();
+  if(!/^[\w.-]+\/[\w.-]+$/.test(repo)||!token){toast('Bitte Repository (name/repo) und Token eingeben');return}
+  const old=localStorage.getItem('ua_gh');localStorage.setItem('ua_gh',JSON.stringify({repo,token}));
+  try{const r=await ghReq('');if(!r.ok)throw new Error(r.status===404||r.status===401?'Repository oder Token stimmt nicht':'GitHub '+r.status);const j=await r.json();if(!j.private)toast('Achtung: Das Repository ist öffentlich. Bitte auf privat stellen.');
+    if(!(j.permissions&&j.permissions.push))throw new Error('Token darf nicht schreiben (Contents: Read and write)')}
+  catch(e){if(old)localStorage.setItem('ua_gh',old);else localStorage.removeItem('ua_gh');toast(e.message||'Verbindung fehlgeschlagen');return}
+  CL.be='gh';lsT('ua_bv',null);lsT('ua_base',null);if(ALL.length)lsS('ua_mod',Date.now());await clSync();render(true);toast(CL.st==='ok'?'Verbunden':CL.st)}
+function ghOff(){lsT('ua_gh',null);lsT('ua_bv',null);lsT('ua_base',null);CL.be=CL.db?'claude':null;CL.st='';render(true);toast('Getrennt. Daten bleiben auf diesem Gerät.')}
+async function clReset(){if(!CL.be)return false;const rm=await be().meta();if(!rm)return false;const R=await rm.read();applyQ(R);setBase(R,rm.ver,lsG('ua_mod'));return true}
 /* Frühere private Sicherung lesen (nur beim Umzug in den gemeinsamen Bereich) */
 async function clPullOld(){const col=clOld(),m=await col.doc('meta').get();if(!m.exists)return false;const{n,ts}=m.data();let txt='';
   for(let i=0;i<n;i++){const c=await col.doc('c'+i).get();if(!c.exists)throw new Error('Teil fehlt');txt+=c.data().s}
   applyQ(await bkRead(txt));lsS('ua_mod',+ts||Date.now());return true}
 async function clInit(){
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
-  if(window.__demo||!window.claude||!window.claude.use)return;
+  if(window.__demo)return;
+  if(ghCfg()){CL.be='gh';await clSync();clUi();return}
+  if(!window.claude||!window.claude.use)return;
   try{
     const[db,user]=await Promise.all([window.claude.use('db'),window.claude.use('user')]);
     if(!db||!user){clUi();return}
-    CL.db=db;CL.id=await user.id();
+    CL.db=db;CL.be='claude';CL.id=await user.id();
     const m=await hhCol().doc('meta').get();
     if(!m.exists){const om=await clOld().doc('meta').get(),cm=om.exists?(+om.data().ts||0):0;
       if(om.exists&&(!ALL.length||cm>lsG('ua_mod')))await clPullOld();
